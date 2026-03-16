@@ -38,6 +38,9 @@
             }
         }
 
+        /* Utility: hidden elements */
+        .hidden { display: none !important; }
+
         /* Hide number input arrows */
         input[type="number"]::-webkit-inner-spin-button,
         input[type="number"]::-webkit-outer-spin-button {
@@ -121,6 +124,12 @@
                         </div>
                         <span class="text-xs text-orange-600/80 font-medium mt-1">Maximalt 20 stycken</span>
                     </div>
+                    <div class="pt-3 border-t-2 border-orange-100 mt-3">
+                        <label class="flex items-center gap-3 cursor-pointer group">
+                            <input type="checkbox" id="use-timer" class="w-5 h-5 rounded border-orange-300 text-orange-600 focus:ring-orange-500 transition-transform group-hover:scale-110">
+                            <span class="text-orange-800 font-medium">Visa timer</span>
+                        </label>
+                    </div>
                 </div>
             </div>
 
@@ -145,6 +154,20 @@
         <button onclick="window.print()" class="p-3 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-600 transition-all transform hover:scale-110" title="Skriv ut / Spara PDF">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
         </button>
+    </div>
+
+    <!-- Timer Display (optional, shown when "Visa timer" is checked) -->
+    <div id="timer-display" class="no-print fixed top-6 left-1/2 -translate-x-1/2 z-40 hidden">
+        <div class="bg-white px-6 py-3 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-2 border-purple-100 flex items-center gap-4">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-purple-500"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span id="timer-text" class="font-mono text-2xl font-bold text-purple-700">00:00</span>
+            <button id="timer-start-stop" onclick="toggleTimer()" aria-label="Starta timer" class="px-4 py-1.5 rounded-full bg-purple-100 hover:bg-purple-200 text-purple-700 font-bold text-sm transition-all">
+                Start
+            </button>
+            <button onclick="resetTimer()" aria-label="Nollställ timer" class="px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm transition-all">
+                Nollställ
+            </button>
+        </div>
     </div>
 
     <div class="max-w-6xl mx-auto mt-4">
@@ -224,9 +247,30 @@
                 { bg: 'bg-rose-100', border: 'border-rose-300', text: 'text-rose-900' }
             ];
 
-            // 3. Generate problems
+            // 3. Build an evenly-distributed, shuffled pool of operations
+            const opsPool = [];
             for (let i = 0; i < count; i++) {
-                const op = ops[Math.floor(Math.random() * ops.length)];
+                opsPool.push(ops[i % ops.length]);
+            }
+            // Fisher-Yates shuffle for random order while keeping even distribution
+            for (let i = opsPool.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [opsPool[i], opsPool[j]] = [opsPool[j], opsPool[i]];
+            }
+
+            // Show or hide timer based on setting
+            const useTimer = document.getElementById('use-timer').checked;
+            const timerDisplay = document.getElementById('timer-display');
+            if (useTimer) {
+                timerDisplay.classList.remove('hidden');
+                resetTimer();
+            } else {
+                timerDisplay.classList.add('hidden');
+            }
+
+            // 4. Generate problems
+            for (let i = 0; i < count; i++) {
+                const op = opsPool[i];
                 let num1, num2;
 
                 if (op === '+') {
@@ -295,13 +339,14 @@
                 // Get a random color theme
                 const theme = cardColors[Math.floor(Math.random() * cardColors.length)];
 
-                // 4. Render the problem card
+                // 5. Render the problem card
                 const card = document.createElement('div');
                 card.className = `problem-card print-break-inside-avoid ${theme.bg} ${theme.border} ${theme.text} rounded-[2rem] shadow-sm border-4 p-8 flex items-center justify-center h-full transform transition-transform duration-300 hover:scale-105 hover:shadow-md cursor-default relative overflow-hidden`;
 
                 if (op === '/') {
                     // Division rendered vertically as a fraction: dividend on top, line, divisor below
                     card.innerHTML = `
+                        <div class="absolute top-3 left-4 text-sm font-bold opacity-60">${i + 1}</div>
                         <div class="font-mono text-5xl font-bold text-center flex flex-col items-center w-48 z-10">
                             <div class="tracking-widest">${num1}</div>
                             <div class="border-b-4 border-current w-full mt-2 pb-2"></div>
@@ -314,6 +359,7 @@
                     // Addition, Subtraction, and Multiplication rendered vertically
                     const opSymbol = op === '*' ? '&times;' : (op === '-' ? '&minus;' : '+');
                     card.innerHTML = `
+                        <div class="absolute top-3 left-4 text-sm font-bold opacity-60">${i + 1}</div>
                         <div class="font-mono text-5xl font-bold text-right flex flex-col w-48 z-10">
                             <div class="tracking-widest">${num1}</div>
                             <div class="flex justify-between w-full border-b-4 border-current pb-2 mt-2">
@@ -333,6 +379,45 @@
             if (closeModal) {
                 closeSettings();
             }
+        }
+
+        // Timer functionality
+        let timerInterval = null;
+        let timerSeconds = 0;
+        let timerRunning = false;
+
+        function updateTimerDisplay() {
+            const mins = Math.floor(timerSeconds / 60).toString().padStart(2, '0');
+            const secs = (timerSeconds % 60).toString().padStart(2, '0');
+            document.getElementById('timer-text').textContent = `${mins}:${secs}`;
+        }
+
+        function toggleTimer() {
+            const btn = document.getElementById('timer-start-stop');
+            if (timerRunning) {
+                clearInterval(timerInterval);
+                timerRunning = false;
+                btn.textContent = 'Fortsätt';
+                btn.setAttribute('aria-label', 'Fortsätt timer');
+            } else {
+                timerInterval = setInterval(() => {
+                    timerSeconds++;
+                    updateTimerDisplay();
+                }, 1000);
+                timerRunning = true;
+                btn.textContent = 'Pausa';
+                btn.setAttribute('aria-label', 'Pausa timer');
+            }
+        }
+
+        function resetTimer() {
+            clearInterval(timerInterval);
+            timerRunning = false;
+            timerSeconds = 0;
+            updateTimerDisplay();
+            const btn = document.getElementById('timer-start-stop');
+            btn.textContent = 'Start';
+            btn.setAttribute('aria-label', 'Starta timer');
         }
 
         // Generate initial batch on page load (modal stays open on first load)
