@@ -29,9 +29,20 @@
                 page-break-inside: avoid;
             }
             #problems-container {
+                grid-template-columns: repeat(3, 1fr) !important;
+                grid-template-rows: auto !important;
                 height: auto !important;
                 gap: 4mm !important;
                 margin-top: 0;
+            }
+            /* Reset "Mark as Done" state so the printed worksheet is clean */
+            .problem-card.is-completed {
+                background-color: white !important;
+                border-color: #333 !important;
+                opacity: 1 !important;
+            }
+            .problem-card.is-completed::after {
+                display: none !important;
             }
             .max-w-6xl {
                 max-width: 100% !important;
@@ -51,6 +62,25 @@
             .problem-card * {
                 color: black !important;
             }
+        }
+
+        /* Mark as Done: toggled via JavaScript using .is-completed class */
+        .problem-card.is-completed {
+            background-color: #d1fae5 !important; /* emerald-100 */
+            border-color: #34d399 !important;      /* emerald-400 */
+        }
+        .problem-card.is-completed::after {
+            content: '✓';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 5rem;
+            color: #059669; /* emerald-600 */
+            opacity: 0.4;
+            font-weight: bold;
+            pointer-events: none;
+            line-height: 1;
         }
 
         /* Utility: hidden elements */
@@ -208,6 +238,11 @@
     </div>
 
     <script>
+        // Toggle "Mark as Done" state on a problem card
+        function toggleDone(card) {
+            card.classList.toggle('is-completed');
+        }
+
         // Modal toggles
         function openSettings() {
             const modal = document.getElementById('settings-modal');
@@ -495,7 +530,9 @@
 
                 // 5. Render the problem card
                 const card = document.createElement('div');
-                card.className = `problem-card print-break-inside-avoid ${theme.bg} ${theme.border} ${theme.text} rounded-[2rem] shadow-sm border-4 ${cardPadding} flex items-center justify-center h-full transform transition-transform duration-300 hover:scale-105 hover:shadow-md cursor-default relative overflow-hidden`;
+                card.className = `problem-card print-break-inside-avoid ${theme.bg} ${theme.border} ${theme.text} rounded-[2rem] shadow-sm border-4 ${cardPadding} flex items-center justify-center h-full transform transition-transform duration-300 hover:scale-105 hover:shadow-md cursor-pointer relative overflow-hidden`;
+                card.setAttribute('title', 'Klicka för att markera som klar');
+                card.addEventListener('click', () => toggleDone(card));
 
                 if (op === '/' ) {
                     // Division rendered as vertical fraction (dividend over divisor)
