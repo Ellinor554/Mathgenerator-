@@ -9,32 +9,47 @@
     <style>
         /* Print styles to ensure the worksheet looks clean when printed or saved as PDF */
         @media print {
+            @page {
+                size: A4;
+                margin: 10mm;
+            }
             body {
                 background-color: white !important;
                 background-image: none !important;
                 padding: 0 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
             }
-            .no-print {
+            .no-print,
+            #settings-modal {
                 display: none !important;
             }
             .print-break-inside-avoid {
                 break-inside: avoid;
+                page-break-inside: avoid;
             }
             #problems-container {
-                height: 100vh !important;
-                gap: 0.5rem !important;
+                height: auto !important;
+                gap: 4mm !important;
                 margin-top: 0;
+            }
+            .max-w-6xl {
+                max-width: 100% !important;
+                margin: 0 !important;
             }
             .problem-card {
                 background-color: white !important;
-                border: 2px solid #cbd5e1 !important; /* light slate */
+                border: 2px solid #333 !important;
                 color: black !important;
                 box-shadow: none !important;
                 transform: none !important;
-                border-radius: 1rem !important;
+                border-radius: 8px !important;
             }
             .problem-card .border-current {
                 border-color: black !important;
+            }
+            .problem-card * {
+                color: black !important;
             }
         }
 
@@ -101,8 +116,8 @@
                             <span class="text-purple-700 text-sm font-medium">Växling (-)</span>
                         </label>
                         <label class="flex items-center gap-2 cursor-pointer group">
-                            <input type="checkbox" id="div-remainder" class="w-5 h-5 rounded border-purple-300 text-purple-600 focus:ring-purple-500 transition-transform group-hover:scale-110">
-                            <span class="text-purple-700 text-sm font-medium">Division med rest (÷)</span>
+                            <input type="checkbox" id="div-decimal" class="w-5 h-5 rounded border-purple-300 text-purple-600 focus:ring-purple-500 transition-transform group-hover:scale-110">
+                            <span class="text-purple-700 text-sm font-medium">Decimaldivision (÷)</span>
                         </label>
                     </div>
                 </div>
@@ -266,16 +281,42 @@
             return [(hi + u1).toString(), (lo + u2).toString()];
         }
 
-        // Division with remainder: num1 is NOT a multiple of num2
-        function generateDivisionRemainder(minBase, maxBase) {
-            let n2 = getRandomInt(2, 9);
-            let n1, attempts = 0;
+        // Division with clean decimal answer (e.g. 7,25 ÷ 5 = 1,45)
+        // Strategy: pick a quotient scaled by 20 (so max 2 decimal places via /20),
+        // then derive dividend = quotient × divisor. Retry if dividend is a whole number.
+        function generateDecimalDivision(minBase, maxBase) {
+            let n2, n1, attempts = 0;
             do {
-                n1 = getRandomInt(minBase, maxBase);
+                n2 = getRandomInt(2, 9);
+                // quotient × 20 gives increments of 0.05 — at most 2 decimal places.
+                // minQ20 is at least 21 (quotient ≥ 1.05), but may be higher when
+                // minBase / n2 exceeds 1.05. maxQ20 ensures a range of at least 20
+                // candidates so there is always room to pick a non-whole-number result.
+                const minQ20 = Math.max(Math.ceil(minBase * 20 / n2), 21);
+                const maxQ20 = Math.max(Math.floor(maxBase * 20 / n2), minQ20 + 20);
+                let q20 = getRandomInt(minQ20, maxQ20);
+                // Ensure the quotient is not a whole number (q20 not divisible by 20)
+                if (q20 % 20 === 0) q20 += 1;
+                n1 = Math.round(q20 * n2) / 20; // dividend
                 attempts++;
-            } while (n1 % n2 === 0 && attempts < MAX_GENERATION_ATTEMPTS);
-            if (n1 % n2 === 0) n1++; // ensure remainder
-            return [n1.toString(), n2.toString(), n1 % n2];
+            } while (Math.round(n1 * 100) % 100 === 0 && attempts < MAX_GENERATION_ATTEMPTS);
+
+            if (Math.round(n1 * 100) % 100 === 0) {
+                // Guaranteed fallback: 7.25 ÷ 5 = 1.45
+                n1 = 7.25; n2 = 5;
+            }
+
+            // Format: use minimum decimal places needed (drop trailing zeros)
+            const n1x100 = Math.round(n1 * 100);
+            let n1Str;
+            if (n1x100 % 100 === 0) {
+                n1Str = n1.toFixed(0);
+            } else if (n1x100 % 10 === 0) {
+                n1Str = n1.toFixed(1);
+            } else {
+                n1Str = n1.toFixed(2);
+            }
+            return [n1Str, n2.toString()];
         }
 
         // Dynamic font/padding sizing based on problem count
@@ -313,7 +354,7 @@
             const useDecimals = document.getElementById('use-decimals').checked;
             const addRegrouping = document.getElementById('add-regrouping').checked;
             const subBorrowing = document.getElementById('sub-borrowing').checked;
-            const divRemainder = document.getElementById('div-remainder').checked;
+            const divDecimal = document.getElementById('div-decimal').checked;
             
             // Enforce max 24 limit
             if (count > 24) {
@@ -377,7 +418,7 @@
 
             for (let i = 0; i < count; i++) {
                 const op = opsPool[i];
-                let num1, num2, remainder = null;
+                let num1, num2;
 
                 if (op === '+') {
                     if (addRegrouping) {
@@ -416,8 +457,8 @@
                     num2 = getRandomInt(2, 9).toString();
                 } 
                 else if (op === '/') {
-                    if (divRemainder) {
-                        [num1, num2, remainder] = generateDivisionRemainder(minBase, maxBase);
+                    if (divDecimal) {
+                        [num1, num2] = generateDecimalDivision(minBase, maxBase);
                     } else if (useDecimals) {
                         let n2 = getRandomInt(2, 9);
                         num2 = n2.toString();
@@ -456,23 +497,8 @@
                 const card = document.createElement('div');
                 card.className = `problem-card print-break-inside-avoid ${theme.bg} ${theme.border} ${theme.text} rounded-[2rem] shadow-sm border-4 ${cardPadding} flex items-center justify-center h-full transform transition-transform duration-300 hover:scale-105 hover:shadow-md cursor-default relative overflow-hidden`;
 
-                if (op === '/' && remainder !== null) {
-                    // Division with remainder: inline format "num1 ÷ num2 = __ R __"
-                    card.innerHTML = `
-                        <div class="absolute top-3 left-4 text-sm font-bold opacity-60">${i + 1}</div>
-                        <div class="font-mono ${textSize} font-bold text-center flex flex-col items-center w-48 z-10">
-                            <div class="tracking-wide">${num1} &divide; ${num2} =</div>
-                            <div class="flex items-center gap-3 mt-3 border-t-4 border-current pt-3 w-full justify-center">
-                                <span class="opacity-40 text-base font-medium">svar:</span>
-                                <span class="border-b-4 border-current inline-block w-10">&nbsp;</span>
-                                <span class="font-bold">R</span>
-                                <span class="border-b-4 border-current inline-block w-10">&nbsp;</span>
-                            </div>
-                        </div>
-                        <div class="absolute -bottom-4 -right-4 text-7xl opacity-5 z-0 font-bold">&divide;</div>
-                    `;
-                } else if (op === '/') {
-                    // Exact division rendered as vertical fraction
+                if (op === '/' ) {
+                    // Division rendered as vertical fraction (dividend over divisor)
                     card.innerHTML = `
                         <div class="absolute top-3 left-4 text-sm font-bold opacity-60">${i + 1}</div>
                         <div class="font-mono ${textSize} font-bold text-center flex flex-col items-center w-48 z-10">
