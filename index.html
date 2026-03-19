@@ -90,6 +90,21 @@
                             <span class="text-purple-800 font-medium">Division (÷)</span>
                         </label>
                     </div>
+                    <div class="mt-3 pt-3 border-t border-purple-200 flex flex-col gap-2">
+                        <p class="text-xs text-purple-600/80 font-semibold uppercase tracking-wide">Avancerade lägen</p>
+                        <label class="flex items-center gap-2 cursor-pointer group">
+                            <input type="checkbox" id="add-regrouping" class="w-5 h-5 rounded border-purple-300 text-purple-600 focus:ring-purple-500 transition-transform group-hover:scale-110">
+                            <span class="text-purple-700 text-sm font-medium">Tiotalsövergång (+)</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer group">
+                            <input type="checkbox" id="sub-borrowing" class="w-5 h-5 rounded border-purple-300 text-purple-600 focus:ring-purple-500 transition-transform group-hover:scale-110">
+                            <span class="text-purple-700 text-sm font-medium">Växling (-)</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer group">
+                            <input type="checkbox" id="div-remainder" class="w-5 h-5 rounded border-purple-300 text-purple-600 focus:ring-purple-500 transition-transform group-hover:scale-110">
+                            <span class="text-purple-700 text-sm font-medium">Division med rest (÷)</span>
+                        </label>
+                    </div>
                 </div>
 
                 <!-- Digits -->
@@ -119,10 +134,10 @@
                     <h3 class="font-bold text-orange-900 mb-3 text-lg">Hur många?</h3>
                     <div class="flex flex-col gap-2">
                         <div class="flex items-center gap-3">
-                            <input type="number" id="count" min="1" max="20" value="20" class="w-24 p-3 border-2 border-orange-200 rounded-xl text-center text-xl font-bold text-orange-900 focus:ring-4 focus:ring-orange-200 focus:border-orange-500 outline-none transition-all bg-white">
+                            <input type="number" id="count" min="1" max="24" value="12" class="w-24 p-3 border-2 border-orange-200 rounded-xl text-center text-xl font-bold text-orange-900 focus:ring-4 focus:ring-orange-200 focus:border-orange-500 outline-none transition-all bg-white">
                             <span class="text-orange-700 font-medium">uppgifter</span>
                         </div>
-                        <span class="text-xs text-orange-600/80 font-medium mt-1">Maximalt 20 stycken</span>
+                        <span class="text-xs text-orange-600/80 font-medium mt-1">Maximalt 24 stycken</span>
                     </div>
                     <div class="pt-3 border-t-2 border-orange-100 mt-3">
                         <label class="flex items-center gap-3 cursor-pointer group">
@@ -194,6 +209,91 @@
             return Math.floor(Math.random() * (max - min + 1)) + min;
         }
 
+        const MAX_GENERATION_ATTEMPTS = 200;
+
+        // Addition with regrouping: units digits must sum to more than 9 (carry required)
+        function generateAdditionRegrouping(minBase, maxBase, useDecimals) {
+            let n1, n2, attempts = 0;
+            do {
+                if (useDecimals) {
+                    n1 = getRandomInt(minBase * 10, maxBase * 10);
+                    n2 = getRandomInt(minBase * 10, maxBase * 10);
+                    if ((n1 % 10) + (n2 % 10) > 9) {
+                        return [(n1 / 10).toFixed(1), (n2 / 10).toFixed(1)];
+                    }
+                } else {
+                    n1 = getRandomInt(minBase, maxBase);
+                    n2 = getRandomInt(minBase, maxBase);
+                    if ((n1 % 10) + (n2 % 10) > 9) {
+                        return [n1.toString(), n2.toString()];
+                    }
+                }
+                attempts++;
+            } while (attempts < MAX_GENERATION_ATTEMPTS);
+            // Fallback: construct a guaranteed carry pair
+            const u1 = getRandomInt(5, 9);
+            const u2 = getRandomInt(10 - u1, 9);
+            const base = getRandomInt(Math.floor(minBase / 10), Math.floor(maxBase / 10)) * 10;
+            return [(base + u1).toString(), (base + u2).toString()];
+        }
+
+        // Subtraction with borrowing: top units digit must be less than bottom units digit
+        function generateSubtractionBorrowing(minBase, maxBase, useDecimals) {
+            let n1, n2, attempts = 0;
+            do {
+                if (useDecimals) {
+                    n1 = getRandomInt(minBase * 10, maxBase * 10);
+                    n2 = getRandomInt(minBase * 10, maxBase * 10);
+                    if (n1 < n2) { const t = n1; n1 = n2; n2 = t; }
+                    if (n1 !== n2 && (n1 % 10) < (n2 % 10)) {
+                        return [(n1 / 10).toFixed(1), (n2 / 10).toFixed(1)];
+                    }
+                } else {
+                    n1 = getRandomInt(minBase, maxBase);
+                    n2 = getRandomInt(minBase, maxBase);
+                    if (n1 < n2) { const t = n1; n1 = n2; n2 = t; }
+                    if (n1 !== n2 && (n1 % 10) < (n2 % 10)) {
+                        return [n1.toString(), n2.toString()];
+                    }
+                }
+                attempts++;
+            } while (attempts < MAX_GENERATION_ATTEMPTS);
+            // Fallback: construct a guaranteed borrow pair
+            const u1 = getRandomInt(0, 4);
+            const u2 = getRandomInt(u1 + 1, 9);
+            const hi = getRandomInt(Math.floor(minBase / 10) + 1, Math.floor(maxBase / 10)) * 10;
+            const lo = Math.max(minBase, (hi - 10));
+            return [(hi + u1).toString(), (lo + u2).toString()];
+        }
+
+        // Division with remainder: num1 is NOT a multiple of num2
+        function generateDivisionRemainder(minBase, maxBase) {
+            let n2 = getRandomInt(2, 9);
+            let n1, attempts = 0;
+            do {
+                n1 = getRandomInt(minBase, maxBase);
+                attempts++;
+            } while (n1 % n2 === 0 && attempts < MAX_GENERATION_ATTEMPTS);
+            if (n1 % n2 === 0) n1++; // ensure remainder
+            return [n1.toString(), n2.toString(), n1 % n2];
+        }
+
+        // Dynamic font/padding sizing based on problem count
+        function getCardTextSize(count) {
+            if (count <= 4) return 'text-5xl';
+            if (count <= 8) return 'text-4xl';
+            if (count <= 12) return 'text-3xl';
+            if (count <= 18) return 'text-2xl';
+            return 'text-xl';
+        }
+
+        function getCardPadding(count) {
+            if (count <= 4) return 'p-8';
+            if (count <= 8) return 'p-6';
+            if (count <= 12) return 'p-4';
+            return 'p-3';
+        }
+
         function generateProblems(closeModal = false) {
             // 1. Gather selected operations
             const ops = [];
@@ -211,11 +311,14 @@
             const digits = parseInt(document.getElementById('digits').value);
             let count = parseInt(document.getElementById('count').value);
             const useDecimals = document.getElementById('use-decimals').checked;
+            const addRegrouping = document.getElementById('add-regrouping').checked;
+            const subBorrowing = document.getElementById('sub-borrowing').checked;
+            const divRemainder = document.getElementById('div-remainder').checked;
             
-            // Enforce max 20 limit
-            if (count > 20) {
-                count = 20;
-                document.getElementById('count').value = 20;
+            // Enforce max 24 limit
+            if (count > 24) {
+                count = 24;
+                document.getElementById('count').value = 24;
             }
             if (count < 1) {
                 count = 1;
@@ -269,12 +372,17 @@
             }
 
             // 4. Generate problems
+            const textSize = getCardTextSize(count);
+            const cardPadding = getCardPadding(count);
+
             for (let i = 0; i < count; i++) {
                 const op = opsPool[i];
-                let num1, num2;
+                let num1, num2, remainder = null;
 
                 if (op === '+') {
-                    if (useDecimals) {
+                    if (addRegrouping) {
+                        [num1, num2] = generateAdditionRegrouping(minBase, maxBase, useDecimals);
+                    } else if (useDecimals) {
                         num1 = (getRandomInt(minBase * 10, maxBase * 10) / 10).toFixed(1);
                         num2 = (getRandomInt(minBase * 10, maxBase * 10) / 10).toFixed(1);
                     } else {
@@ -283,7 +391,9 @@
                     }
                 } 
                 else if (op === '-') {
-                    if (useDecimals) {
+                    if (subBorrowing) {
+                        [num1, num2] = generateSubtractionBorrowing(minBase, maxBase, useDecimals);
+                    } else if (useDecimals) {
                         let n1 = getRandomInt(minBase * 10, maxBase * 10);
                         let n2 = getRandomInt(minBase * 10, maxBase * 10);
                         if (n1 < n2) { const temp = n1; n1 = n2; n2 = temp; }
@@ -306,10 +416,11 @@
                     num2 = getRandomInt(2, 9).toString();
                 } 
                 else if (op === '/') {
-                    let n2 = getRandomInt(2, 9);
-                    num2 = n2.toString();
-                    
-                    if (useDecimals) {
+                    if (divRemainder) {
+                        [num1, num2, remainder] = generateDivisionRemainder(minBase, maxBase);
+                    } else if (useDecimals) {
+                        let n2 = getRandomInt(2, 9);
+                        num2 = n2.toString();
                         const minMultiplier = Math.ceil((minBase * 10) / n2);
                         const maxMultiplier = Math.floor((maxBase * 10) / n2);
                         let multiplier;
@@ -320,6 +431,8 @@
                         }
                         num1 = ((multiplier * n2) / 10).toFixed(1);
                     } else {
+                        let n2 = getRandomInt(2, 9);
+                        num2 = n2.toString();
                         const minMultiplier = Math.ceil(minBase / n2);
                         const maxMultiplier = Math.floor(maxBase / n2);
                         let multiplier;
@@ -341,13 +454,28 @@
 
                 // 5. Render the problem card
                 const card = document.createElement('div');
-                card.className = `problem-card print-break-inside-avoid ${theme.bg} ${theme.border} ${theme.text} rounded-[2rem] shadow-sm border-4 p-8 flex items-center justify-center h-full transform transition-transform duration-300 hover:scale-105 hover:shadow-md cursor-default relative overflow-hidden`;
+                card.className = `problem-card print-break-inside-avoid ${theme.bg} ${theme.border} ${theme.text} rounded-[2rem] shadow-sm border-4 ${cardPadding} flex items-center justify-center h-full transform transition-transform duration-300 hover:scale-105 hover:shadow-md cursor-default relative overflow-hidden`;
 
-                if (op === '/') {
-                    // Division rendered vertically as a fraction: dividend on top, line, divisor below
+                if (op === '/' && remainder !== null) {
+                    // Division with remainder: inline format "num1 ÷ num2 = __ R __"
                     card.innerHTML = `
                         <div class="absolute top-3 left-4 text-sm font-bold opacity-60">${i + 1}</div>
-                        <div class="font-mono text-5xl font-bold text-center flex flex-col items-center w-48 z-10">
+                        <div class="font-mono ${textSize} font-bold text-center flex flex-col items-center w-48 z-10">
+                            <div class="tracking-wide">${num1} &divide; ${num2} =</div>
+                            <div class="flex items-center gap-3 mt-3 border-t-4 border-current pt-3 w-full justify-center">
+                                <span class="opacity-40 text-base font-medium">svar:</span>
+                                <span class="border-b-4 border-current inline-block w-10">&nbsp;</span>
+                                <span class="font-bold">R</span>
+                                <span class="border-b-4 border-current inline-block w-10">&nbsp;</span>
+                            </div>
+                        </div>
+                        <div class="absolute -bottom-4 -right-4 text-7xl opacity-5 z-0 font-bold">&divide;</div>
+                    `;
+                } else if (op === '/') {
+                    // Exact division rendered as vertical fraction
+                    card.innerHTML = `
+                        <div class="absolute top-3 left-4 text-sm font-bold opacity-60">${i + 1}</div>
+                        <div class="font-mono ${textSize} font-bold text-center flex flex-col items-center w-48 z-10">
                             <div class="tracking-widest">${num1}</div>
                             <div class="border-b-4 border-current w-full mt-2 pb-2"></div>
                             <div class="tracking-widest mt-2">${num2}</div>
@@ -360,7 +488,7 @@
                     const opSymbol = op === '*' ? '&times;' : (op === '-' ? '&minus;' : '+');
                     card.innerHTML = `
                         <div class="absolute top-3 left-4 text-sm font-bold opacity-60">${i + 1}</div>
-                        <div class="font-mono text-5xl font-bold text-right flex flex-col w-48 z-10">
+                        <div class="font-mono ${textSize} font-bold text-right flex flex-col w-48 z-10">
                             <div class="tracking-widest">${num1}</div>
                             <div class="flex justify-between w-full border-b-4 border-current pb-2 mt-2">
                                 <span class="opacity-70">${opSymbol}</span>
